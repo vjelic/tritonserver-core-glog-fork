@@ -36,14 +36,14 @@
 #include "scheduler.h"
 #include "status.h"
 
-#ifdef TRITON_ENABLE_GPU
-#include <cuda_runtime_api.h>
+#ifdef TRITON_ENABLE_ROCM
+#include <hip/hip_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
 namespace triton { namespace core {
 
-#ifndef TRITON_ENABLE_GPU
-using cudaStream_t = void*;
+#ifndef TRITON_ENABLE_ROCM
+using hipStream_t = void*;
 #endif  // TRITON_ENABLE_GPU
 
 class InferenceServer;
@@ -115,7 +115,7 @@ class EnsembleScheduler : public Scheduler {
   std::unique_ptr<EnsembleInfo> info_;
 
   // The stream used for data transfer.
-  cudaStream_t stream_;
+  hipStream_t stream_;
 
   std::atomic<size_t> inflight_count_;
 };

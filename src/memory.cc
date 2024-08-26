@@ -29,8 +29,8 @@
 #include "pinned_memory_manager.h"
 #include "triton/common/logging.h"
 
-#ifdef TRITON_ENABLE_GPU
-#include <cuda_runtime_api.h>
+#ifdef TRITON_ENABLE_ROCM
+#include <hip/hip_runtime_api.h>
 
 #include "cuda_memory_manager.h"
 #endif  // TRITON_ENABLE_GPU
@@ -171,9 +171,9 @@ AllocatedMemory::AllocatedMemory(
 {
   if (total_byte_size_ != 0) {
     // Allocate memory with the following fallback policy:
-    // CUDA memory -> pinned system memory -> non-pinned system memory
+    // ROCM memory -> pinned system memory -> non-pinned system memory
     switch (buffer_attributes_.MemoryType()) {
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
       case TRITONSERVER_MEMORY_GPU: {
         auto status = CudaMemoryManager::Alloc(
             (void**)&buffer_, total_byte_size_,
@@ -213,7 +213,7 @@ AllocatedMemory::~AllocatedMemory()
   if (buffer_ != nullptr) {
     switch (buffer_attributes_.MemoryType()) {
       case TRITONSERVER_MEMORY_GPU: {
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
         auto status =
             CudaMemoryManager::Free(buffer_, buffer_attributes_.MemoryTypeId());
         if (!status.IsOk()) {

@@ -79,7 +79,7 @@ Status GetTypedSequenceControlProperties(
 /// Read a ModelConfig and normalize it as expected by model backends.
 /// \param path The full-path to the directory containing the
 /// model configuration.
-/// \param min_compute_capability The minimum support CUDA compute
+/// \param min_compute_capability The minimum support ROCM compute
 /// capability.
 /// \param config Returns the normalized model configuration.
 /// \return The error status.
@@ -100,7 +100,7 @@ Status AutoCompleteBackendFields(
     inference::ModelConfig* config);
 
 /// Detects and adds missing fields in the model configuration.
-/// \param min_compute_capability The minimum supported CUDA compute
+/// \param min_compute_capability The minimum supported ROCM compute
 /// capability.
 /// \param config The model configuration
 /// \return The error status
@@ -109,7 +109,7 @@ Status NormalizeModelConfig(
 
 /// [FIXME] better formalize config normalization / validation
 /// Detects and adds missing fields in instance group setting.
-/// \param min_compute_capability The minimum supported CUDA compute
+/// \param min_compute_capability The minimum supported ROCM compute
 /// capability.
 /// \param config The model configuration
 /// \return The error status
@@ -140,7 +140,7 @@ Status SetDefaultInstanceCount(
 /// and outputs. ValidateModelIOConfig() should be called to
 /// validate model inputs and outputs.
 /// \param config The model configuration to validate.
-/// \param min_compute_capability The minimum support CUDA compute
+/// \param min_compute_capability The minimum support ROCM compute
 /// capability.
 /// \return The error status. A non-OK status indicates the configuration
 /// is not valid.
@@ -150,7 +150,7 @@ Status ValidateModelConfig(
 /// [FIXME] better formalize config normalization / validation
 /// Validate instance group setting.
 /// \param config The model configuration to validate.
-/// \param min_compute_capability The minimum support CUDA compute
+/// \param min_compute_capability The minimum support ROCM compute
 /// capability.
 /// \return The error status. A non-OK status indicates the configuration
 /// is not valid.

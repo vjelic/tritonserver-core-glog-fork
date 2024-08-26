@@ -52,7 +52,7 @@ struct ModelLifeCycleOptions {
         model_load_thread_count_(model_load_thread_count)
   {
   }
-  // The minimum supported CUDA compute capability.
+  // The minimum supported ROCM compute capability.
   const double min_compute_capability_;
   // The backend configuration settings specified on the command-line
   const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map_;

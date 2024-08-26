@@ -39,12 +39,12 @@ class BufferAttributes {
  public:
   BufferAttributes(
       size_t byte_size, TRITONSERVER_MemoryType memory_type,
-      int64_t memory_type_id, char cuda_ipc_handle[64]);
+      int64_t memory_type_id, char rocm_ipc_handle[64]);
   BufferAttributes()
   {
     memory_type_ = TRITONSERVER_MEMORY_CPU;
     memory_type_id_ = 0;
-    cuda_ipc_handle_.reserve(64);
+    rocm_ipc_handle_.reserve(64);
   }
 
   // Set the buffer byte size
@@ -56,10 +56,10 @@ class BufferAttributes {
   // Set the buffer memory type id
   void SetMemoryTypeId(const int64_t& memory_type_id);
 
-  // Set the cuda ipc handle
-  void SetCudaIpcHandle(void* cuda_ipc_handle);
+  // Set the rocm ipc handle
+  void SetCudaIpcHandle(void* rocm_ipc_handle);
 
-  // Get the cuda ipc handle
+  // Get the rocm ipc handle
   void* CudaIpcHandle();
 
   // Get the byte size
@@ -75,6 +75,6 @@ class BufferAttributes {
   size_t byte_size_;
   TRITONSERVER_MemoryType memory_type_;
   int64_t memory_type_id_;
-  std::vector<char> cuda_ipc_handle_;
+  std::vector<char> rocm_ipc_handle_;
 };
 }}  // namespace triton::core

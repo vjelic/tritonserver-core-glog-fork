@@ -236,11 +236,11 @@ class TritonServerOptions {
 
   const std::map<int, uint64_t>& CudaMemoryPoolByteSize() const
   {
-    return cuda_memory_pool_size_;
+    return rocm_memory_pool_size_;
   }
   void SetCudaMemoryPoolByteSize(int id, uint64_t s)
   {
-    cuda_memory_pool_size_[id] = s;
+    rocm_memory_pool_size_[id] = s;
   }
 
   double MinSupportedComputeCapability() const
@@ -347,7 +347,7 @@ class TritonServerOptions {
   unsigned int buffer_manager_thread_count_;
   unsigned int model_load_thread_count_;
   bool enable_model_namespacing_;
-  std::map<int, uint64_t> cuda_memory_pool_size_;
+  std::map<int, uint64_t> rocm_memory_pool_size_;
   double min_compute_capability_;
   std::string backend_dir_;
   std::string repoagent_dir_;
@@ -369,7 +369,7 @@ TritonServerOptions::TritonServerOptions()
       exit_timeout_(30), pinned_memory_pool_size_(1 << 28),
       buffer_manager_thread_count_(0), model_load_thread_count_(4),
       enable_model_namespacing_(false),
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
       min_compute_capability_(TRITON_MIN_COMPUTE_CAPABILITY),
 #else
       min_compute_capability_(0),
@@ -2208,11 +2208,11 @@ TRITONSERVER_BufferAttributesSetMemoryType(
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesSetCudaIpcHandle(
-    TRITONSERVER_BufferAttributes* buffer_attributes, void* cuda_ipc_handle)
+    TRITONSERVER_BufferAttributes* buffer_attributes, void* rocm_ipc_handle)
 {
   tc::BufferAttributes* lbuffer_attributes =
       reinterpret_cast<tc::BufferAttributes*>(buffer_attributes);
-  lbuffer_attributes->SetCudaIpcHandle(cuda_ipc_handle);
+  lbuffer_attributes->SetCudaIpcHandle(rocm_ipc_handle);
 
   return nullptr;  // success
 }
@@ -2253,11 +2253,11 @@ TRITONSERVER_BufferAttributesMemoryType(
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesCudaIpcHandle(
-    TRITONSERVER_BufferAttributes* buffer_attributes, void** cuda_ipc_handle)
+    TRITONSERVER_BufferAttributes* buffer_attributes, void** rocm_ipc_handle)
 {
   tc::BufferAttributes* lbuffer_attributes =
       reinterpret_cast<tc::BufferAttributes*>(buffer_attributes);
-  *cuda_ipc_handle = lbuffer_attributes->CudaIpcHandle();
+  *rocm_ipc_handle = lbuffer_attributes->CudaIpcHandle();
 
   return nullptr;  // success
 }
@@ -2434,11 +2434,11 @@ TRITONSERVER_ServerNew(
   options_table.InsertRow(std::vector<std::string>{
       "pinned_memory_pool_byte_size",
       std::to_string(lserver->PinnedMemoryPoolByteSize())});
-  for (const auto& cuda_memory_pool : lserver->CudaMemoryPoolByteSize()) {
+  for (const auto& rocm_memory_pool : lserver->CudaMemoryPoolByteSize()) {
     options_table.InsertRow(std::vector<std::string>{
-        "cuda_memory_pool_byte_size{" + std::to_string(cuda_memory_pool.first) +
+        "rocm_memory_pool_byte_size{" + std::to_string(rocm_memory_pool.first) +
             "}",
-        std::to_string(cuda_memory_pool.second)});
+        std::to_string(rocm_memory_pool.second)});
   }
 
   std::stringstream compute_capability_ss;

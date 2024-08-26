@@ -1616,13 +1616,13 @@ TRITONSERVER_BufferAttributesSetMemoryType(
 /// Set the CudaIpcHandle field of the buffer attributes.
 ///
 /// \param buffer_attributes The buffer attributes object.
-/// \param cuda_ipc_handle The CudaIpcHandle to assign to the buffer attributes
+/// \param rocm_ipc_handle The CudaIpcHandle to assign to the buffer attributes
 /// object.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesSetCudaIpcHandle(
     struct TRITONSERVER_BufferAttributes* buffer_attributes,
-    void* cuda_ipc_handle);
+    void* rocm_ipc_handle);
 
 /// Set the byte size field of the buffer attributes.
 ///
@@ -1658,14 +1658,14 @@ TRITONSERVER_BufferAttributesMemoryType(
 /// Get the CudaIpcHandle field of the buffer attributes object.
 ///
 /// \param buffer_attributes The buffer attributes object.
-/// \param cuda_ipc_handle Returns the memory type associated with the buffer
-/// attributes object. If the cudaIpcHandle does not exist for the buffer,
+/// \param rocm_ipc_handle Returns the memory type associated with the buffer
+/// attributes object. If the rocmIpcHandle does not exist for the buffer,
 /// nullptr will be returned.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesCudaIpcHandle(
     struct TRITONSERVER_BufferAttributes* buffer_attributes,
-    void** cuda_ipc_handle);
+    void** rocm_ipc_handle);
 
 /// Get the byte size field of the buffer attributes.
 ///
@@ -1834,14 +1834,14 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetPinnedMemoryPoolByteSize(
     struct TRITONSERVER_ServerOptions* options, uint64_t size);
 
-/// Set the total CUDA memory byte size that the server can allocate
+/// Set the total ROCM memory byte size that the server can allocate
 /// on given GPU device in a server options. The pinned memory pool
 /// will be shared across Triton itself and the backends that use
 /// TRITONBACKEND_MemoryManager to allocate memory.
 ///
 /// \param options The server options object.
 /// \param gpu_device The GPU device to allocate the memory pool.
-/// \param size The CUDA memory pool byte size.
+/// \param size The ROCM memory pool byte size.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
@@ -1896,11 +1896,11 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetCacheDirectory(
     struct TRITONSERVER_ServerOptions* options, const char* cache_dir);
 
-/// Set the minimum support CUDA compute capability in a server
+/// Set the minimum support ROCM compute capability in a server
 /// options.
 ///
 /// \param options The server options object.
-/// \param cc The minimum CUDA compute capability.
+/// \param cc The minimum ROCM compute capability.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetMinSupportedComputeCapability(

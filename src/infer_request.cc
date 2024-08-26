@@ -275,7 +275,7 @@ InferenceRequest::TraceInputTensors(
     uint64_t buffer_size;
     TRITONSERVER_MemoryType src_memory_type;
     int64_t src_memory_type_id;
-    bool cuda_used;
+    bool rocm_used;
 
     if (buffer_count == 0) {
       LOG_STATUS_ERROR(
@@ -332,7 +332,7 @@ InferenceRequest::TraceInputTensors(
       status = CopyBuffer(
           "InferenceRequest TraceInputTensors", src_memory_type,
           src_memory_type_id, dst_memory_type, dst_memory_type_id, buffer_size,
-          buffer, base + offset, nullptr, &cuda_used);
+          buffer, base + offset, nullptr, &rocm_used);
       if (!status.IsOk()) {
         LOG_STATUS_ERROR(
             status, LogRequest() +

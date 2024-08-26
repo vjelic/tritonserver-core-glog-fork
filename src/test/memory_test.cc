@@ -25,7 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "memory.h"
 
-#include <cuda_runtime_api.h>
+#include <hip/hip_runtime_api.h>
 
 #include "cuda_memory_manager.h"
 #include "cuda_utils.h"
@@ -38,16 +38,16 @@ namespace {
 
 #define CHECK_POINTER_ATTRIBUTES(ptr__, type__, device__)                   \
   do {                                                                      \
-    cudaPointerAttributes attr;                                             \
-    auto cuerr = cudaPointerGetAttributes(&attr, ptr__);                    \
-    ASSERT_TRUE(cuerr == cudaSuccess)                                       \
-        << "Failed to get CUDA pointer attributes: "                        \
-        << cudaGetErrorString(cuerr);                                       \
+    hipPointerAttribute_t attr;                                             \
+    auto cuerr = hipPointerGetAttributes(&attr, ptr__);                     \
+    ASSERT_TRUE(cuerr == hipSuccess)                                        \
+        << "Failed to get ROCM pointer attributes: "                        \
+        << hipGetErrorString(cuerr);                                        \
     EXPECT_TRUE(attr.type == type__)                                        \
         << "Expect pointer with type " << type__ << ", got: " << attr.type; \
-    if (attr.type == cudaMemoryTypeDevice) {                                \
+    if (attr.type == hipMemoryTypeDevice) {                                 \
       EXPECT_TRUE(attr.device == device__)                                  \
-          << "Expect allocation on CUDA device " << device__                \
+          << "Expect allocation on ROCM device " << device__                \
           << ", got: " << attr.device;                                      \
     }                                                                       \
   } while (false)
@@ -126,8 +126,8 @@ TEST_F(CudaMemoryManagerTest, AllocSuccess)
   status = tc::CudaMemoryManager::Alloc(&ptr, 1024, 0);
   ASSERT_TRUE(status.IsOk()) << status.Message();
   ASSERT_TRUE(ptr) << "Expect pointer to allocated buffer";
-  // check if returned pointer is CUDA pointer
-  CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeDevice, 0);
+  // check if returned pointer is ROCM pointer
+  CHECK_POINTER_ATTRIBUTES(ptr, hipMemoryTypeDevice, 0);
 }
 
 TEST_F(CudaMemoryManagerTest, AllocFail)
@@ -149,8 +149,8 @@ TEST_F(CudaMemoryManagerTest, MultipleAlloc)
   status = tc::CudaMemoryManager::Alloc(&first_ptr, 600, 0);
   ASSERT_TRUE(status.IsOk()) << status.Message();
   ASSERT_TRUE(first_ptr) << "Expect pointer to allocated buffer";
-  // check if returned pointer is CUDA pointer
-  CHECK_POINTER_ATTRIBUTES(first_ptr, cudaMemoryTypeDevice, 0);
+  // check if returned pointer is ROCM pointer
+  CHECK_POINTER_ATTRIBUTES(first_ptr, hipMemoryTypeDevice, 0);
 
   // 512 + 600 > 1024
   void* second_ptr = nullptr;
@@ -163,8 +163,8 @@ TEST_F(CudaMemoryManagerTest, MultipleAlloc)
   status = tc::CudaMemoryManager::Alloc(&second_ptr, 512, 0);
   ASSERT_TRUE(status.IsOk()) << status.Message();
   ASSERT_TRUE(second_ptr) << "Expect pointer to allocated buffer";
-  // check if returned pointer is CUDA pointer
-  CHECK_POINTER_ATTRIBUTES(second_ptr, cudaMemoryTypeDevice, 0);
+  // check if returned pointer is ROCM pointer
+  CHECK_POINTER_ATTRIBUTES(second_ptr, hipMemoryTypeDevice, 0);
 }
 
 TEST_F(CudaMemoryManagerTest, MultipleDevice)
@@ -174,7 +174,7 @@ TEST_F(CudaMemoryManagerTest, MultipleDevice)
       &supported_gpus, options_.min_supported_compute_capability_);
   ASSERT_TRUE(status.IsOk()) << status.Message();
   ASSERT_GE(supported_gpus.size(), size_t(2))
-      << "Test requires at least two supported CUDA devices";
+      << "Test requires at least two supported ROCM devices";
 
   {
     double cc = 6.0;
@@ -198,8 +198,8 @@ TEST_F(CudaMemoryManagerTest, MultipleDevice)
   status = tc::CudaMemoryManager::Alloc(&ptr, 1024, large_device);
   ASSERT_TRUE(status.IsOk()) << status.Message();
   ASSERT_TRUE(ptr) << "Expect pointer to allocated buffer";
-  // check if returned pointer is CUDA pointer
-  CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeDevice, large_device);
+  // check if returned pointer is ROCM pointer
+  CHECK_POINTER_ATTRIBUTES(ptr, hipMemoryTypeDevice, large_device);
 
   // Free allocation ...
   status = tc::CudaMemoryManager::Free(ptr, small_device);
@@ -221,7 +221,7 @@ class AllocatedMemoryTest : public ::testing::Test {
     }
   }
 
-  // Set up CUDA memory manager per test for special fallback case
+  // Set up ROCM memory manager per test for special fallback case
   void SetUp() override
   {
     tc::CudaMemoryManager::Options options{6.0, {{0, 1 << 10}}};
@@ -248,7 +248,7 @@ TEST_F(AllocatedMemoryTest, AllocGPU)
       << "Expect id: " << expect_id << ", got: " << actual_id;
 
   // Sanity check on the pointer property
-  CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeDevice, expect_id);
+  CHECK_POINTER_ATTRIBUTES(ptr, hipMemoryTypeDevice, expect_id);
 }
 
 TEST_F(AllocatedMemoryTest, AllocPinned)
@@ -268,7 +268,7 @@ TEST_F(AllocatedMemoryTest, AllocPinned)
       << "Expect id: " << expect_id << ", got: " << actual_id;
 
   // Sanity check on the pointer property
-  CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeHost, expect_id);
+  CHECK_POINTER_ATTRIBUTES(ptr, hipMemoryTypeHost, expect_id);
 }
 
 TEST_F(AllocatedMemoryTest, AllocFallback)
@@ -279,9 +279,9 @@ TEST_F(AllocatedMemoryTest, AllocFallback)
   int64_t expect_id = 0, actual_id;
 
   // First allocation
-  tc::AllocatedMemory cuda_memory(expect_size, expect_type, expect_id);
+  tc::AllocatedMemory rocm_memory(expect_size, expect_type, expect_id);
 
-  auto ptr = cuda_memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
+  auto ptr = rocm_memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
   EXPECT_EQ(expect_size, actual_size)
       << "Expect size: " << expect_size << ", got: " << actual_size;
   EXPECT_EQ(expect_type, actual_type)
@@ -290,9 +290,9 @@ TEST_F(AllocatedMemoryTest, AllocFallback)
       << "Expect id: " << expect_id << ", got: " << actual_id;
 
   // Sanity check on the pointer property
-  CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeDevice, expect_id);
+  CHECK_POINTER_ATTRIBUTES(ptr, hipMemoryTypeDevice, expect_id);
 
-  // Second allocation, should trigger fallback from CUDA -> pinned memory
+  // Second allocation, should trigger fallback from ROCM -> pinned memory
   tc::AllocatedMemory pinned_memory(expect_size, expect_type, expect_id);
 
   ptr = pinned_memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
@@ -303,9 +303,9 @@ TEST_F(AllocatedMemoryTest, AllocFallback)
       << ", got: " << actual_type;
 
   // Sanity check on the pointer property
-  CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeHost, expect_id);
+  CHECK_POINTER_ATTRIBUTES(ptr, hipMemoryTypeHost, expect_id);
 
-  // Third allocation, CUDA -> pinned -> non-pinned
+  // Third allocation, ROCM -> pinned -> non-pinned
   tc::AllocatedMemory system_memory(expect_size, expect_type, expect_id);
 
   ptr = system_memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
@@ -316,19 +316,19 @@ TEST_F(AllocatedMemoryTest, AllocFallback)
       << ", got: " << actual_type;
 
   // Sanity check on the pointer property
-  CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeUnregistered, expect_id);
+  CHECK_POINTER_ATTRIBUTES(ptr, rocmMemoryTypeUnregistered, expect_id);
 }
 
 TEST_F(AllocatedMemoryTest, AllocFallbackNoCuda)
 {
-  // Test fallback in the case where CUDA memory manager is not properly created
+  // Test fallback in the case where ROCM memory manager is not properly created
   TestingCudaMemoryManager::Reset();
 
   size_t expect_size = 600, actual_size;
   TRITONSERVER_MemoryType expect_type = TRITONSERVER_MEMORY_GPU, actual_type;
   int64_t expect_id = 0, actual_id;
 
-  // CUDA memory allocation should trigger fallback to allocate pinned memory
+  // ROCM memory allocation should trigger fallback to allocate pinned memory
   tc::AllocatedMemory pinned_memory(expect_size, expect_type, expect_id);
 
   auto ptr = pinned_memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
@@ -339,7 +339,7 @@ TEST_F(AllocatedMemoryTest, AllocFallbackNoCuda)
       << ", got: " << actual_type;
 
   // Sanity check on the pointer property
-  CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeHost, expect_id);
+  CHECK_POINTER_ATTRIBUTES(ptr, hipMemoryTypeHost, expect_id);
 }
 
 TEST_F(AllocatedMemoryTest, Release)
@@ -353,9 +353,9 @@ TEST_F(AllocatedMemoryTest, Release)
 
   {
     // First allocation
-    tc::AllocatedMemory cuda_memory(expect_size, expect_type, expect_id);
+    tc::AllocatedMemory rocm_memory(expect_size, expect_type, expect_id);
 
-    auto ptr = cuda_memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
+    auto ptr = rocm_memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
     EXPECT_EQ(expect_size, actual_size)
         << "Expect size: " << expect_size << ", got: " << actual_size;
     EXPECT_EQ(expect_type, actual_type)
@@ -364,9 +364,9 @@ TEST_F(AllocatedMemoryTest, Release)
         << "Expect id: " << expect_id << ", got: " << actual_id;
 
     // Sanity check on the pointer property
-    CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeDevice, expect_id);
+    CHECK_POINTER_ATTRIBUTES(ptr, hipMemoryTypeDevice, expect_id);
 
-    // Second allocation, should trigger fallback from CUDA -> pinned memory
+    // Second allocation, should trigger fallback from ROCM -> pinned memory
     tc::AllocatedMemory pinned_memory(expect_size, expect_type, expect_id);
 
     ptr = pinned_memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
@@ -377,7 +377,7 @@ TEST_F(AllocatedMemoryTest, Release)
         << ", got: " << actual_type;
 
     // Sanity check on the pointer property
-    CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeHost, expect_id);
+    CHECK_POINTER_ATTRIBUTES(ptr, hipMemoryTypeHost, expect_id);
   }
 
   // Third allocation, should not trigger fallback
@@ -390,7 +390,7 @@ TEST_F(AllocatedMemoryTest, Release)
       << "Expect type: " << expect_type << ", got: " << actual_type;
 
   // Sanity check on the pointer property
-  CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeDevice, expect_id);
+  CHECK_POINTER_ATTRIBUTES(ptr, hipMemoryTypeDevice, expect_id);
 }
 
 }  // namespace

@@ -25,7 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pinned_memory_manager.h"
 
-#include <cuda_runtime_api.h>
+#include <hip/hip_runtime_api.h>
 
 #include <condition_variable>
 #include <mutex>
@@ -41,16 +41,16 @@ namespace {
 
 #define CHECK_POINTER_ATTRIBUTES(ptr__, type__, device__)                   \
   do {                                                                      \
-    cudaPointerAttributes attr;                                             \
-    auto cuerr = cudaPointerGetAttributes(&attr, ptr__);                    \
-    ASSERT_TRUE(cuerr == cudaSuccess)                                       \
-        << "Failed to get CUDA pointer attributes: "                        \
-        << cudaGetErrorString(cuerr);                                       \
+    hipPointerAttribute_t attr;                                             \
+    auto cuerr = hipPointerGetAttributes(&attr, ptr__);                    \
+    ASSERT_TRUE(cuerr == hipSuccess)                                       \
+        << "Failed to get ROCM pointer attributes: "                        \
+        << hipGetErrorString(cuerr);                                       \
     EXPECT_TRUE(attr.type == type__)                                        \
         << "Expect pointer with type " << type__ << ", got: " << attr.type; \
-    if (attr.type == cudaMemoryTypeDevice) {                                \
+    if (attr.type == hipMemoryTypeDevice) {                                \
       EXPECT_TRUE(attr.device == device__)                                  \
-          << "Expect allocation on CUDA device " << device__                \
+          << "Expect allocation on ROCM device " << device__                \
           << ", got: " << attr.device;                                      \
     }                                                                       \
   } while (false)
@@ -200,7 +200,7 @@ TEST_F(PinnedMemoryManagerTest, AllocSuccess)
   ASSERT_TRUE(allocated_type == TRITONSERVER_MEMORY_CPU_PINNED)
       << "Expect pointer to pinned memory";
   // check if returned pointer is pinned memory pointer
-  CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeHost, 0);
+  CHECK_POINTER_ATTRIBUTES(ptr, hipMemoryTypeHost, 0);
 }
 
 TEST_F(PinnedMemoryManagerTest, AllocFallbackSuccess)
@@ -217,7 +217,7 @@ TEST_F(PinnedMemoryManagerTest, AllocFallbackSuccess)
   ASSERT_TRUE(allocated_type == TRITONSERVER_MEMORY_CPU)
       << "Expect pointer to non-pinned memory";
   // check if returned pointer is non-pinned memory pointer
-  CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeUnregistered, 0);
+  CHECK_POINTER_ATTRIBUTES(ptr, rocmMemoryTypeUnregistered, 0);
 }
 
 TEST_F(PinnedMemoryManagerTest, AllocFail)
@@ -246,7 +246,7 @@ TEST_F(PinnedMemoryManagerTest, MultipleAlloc)
   ASSERT_TRUE(allocated_type == TRITONSERVER_MEMORY_CPU_PINNED)
       << "Expect pointer to pinned memory";
   // check if returned pointer is pinned memory pointer
-  CHECK_POINTER_ATTRIBUTES(first_ptr, cudaMemoryTypeHost, 0);
+  CHECK_POINTER_ATTRIBUTES(first_ptr, hipMemoryTypeHost, 0);
 
   // 512 + 600 > 1024
   void* second_ptr = nullptr;
@@ -264,7 +264,7 @@ TEST_F(PinnedMemoryManagerTest, MultipleAlloc)
   ASSERT_TRUE(allocated_type == TRITONSERVER_MEMORY_CPU_PINNED)
       << "Expect pointer to pinned memory";
   // check if returned pointer is pinned memory pointer
-  CHECK_POINTER_ATTRIBUTES(second_ptr, cudaMemoryTypeHost, 0);
+  CHECK_POINTER_ATTRIBUTES(second_ptr, hipMemoryTypeHost, 0);
 }
 
 TEST_F(PinnedMemoryManagerTest, ParallelAlloc)

@@ -230,7 +230,7 @@ class EnsembleContext {
       MetricModelReporter* metric_reporter,
       InferenceStatsAggregator* stats_aggregator, InferenceServer* is,
       EnsembleInfo* info, std::unique_ptr<InferenceRequest>& request,
-      cudaStream_t stream);
+      hipStream_t stream);
 
   // Perform transition on 'context' state given the information of
   // 'completed_step'
@@ -320,9 +320,9 @@ class EnsembleContext {
 
   EnsembleInfo* info_;
 
-  // All EnsembleContext will use the same CUDA stream managed by
+  // All EnsembleContext will use the same ROCM stream managed by
   // the ensemble scheduler
-  cudaStream_t stream_;
+  hipStream_t stream_;
 
   // Mutex to avoid concurrent call on 'PrepareSteps' where ensemble state
   // are being modified
@@ -371,7 +371,7 @@ EnsembleContext::EnsembleContext(
     MetricModelReporter* metric_reporter,
     InferenceStatsAggregator* stats_aggregator, InferenceServer* is,
     EnsembleInfo* info, std::unique_ptr<InferenceRequest>& request,
-    cudaStream_t stream)
+    hipStream_t stream)
     : is_(is), info_(info), stream_(stream), inflight_step_counter_(0),
       allocator_(nullptr, TRITONSERVER_ResponseAllocatorDelete)
 {
@@ -1136,7 +1136,7 @@ EnsembleContext::CheckAndSetEnsembleOutput(
 
   RETURN_IF_ERROR(lrequest->ResponseFactory()->CreateResponse(response));
 
-  bool cuda_async_copy = false;
+  bool rocm_async_copy = false;
   std::map<TensorData*, size_t*> releasing_tensors;
   for (const auto& output_pair : info_->ensemble_output_shape_) {
     if (requested_outputs.find(output_pair.first) == requested_outputs.end()) {
@@ -1181,13 +1181,13 @@ EnsembleContext::CheckAndSetEnsembleOutput(
 
     const char* content = tensor.data_->Data()->BufferAt(
         content_idx, &content_size, &src_memory_type, &src_memory_type_id);
-    bool cuda_used = false;
+    bool rocm_used = false;
     while (content != nullptr) {
       RETURN_IF_ERROR(CopyBuffer(
           output_pair.first, src_memory_type, src_memory_type_id,
           dst_memory_type, dst_memory_type_id, content_size, content,
-          ((char*)buffer) + content_offset, stream_, &cuda_used));
-      cuda_async_copy |= cuda_used;
+          ((char*)buffer) + content_offset, stream_, &rocm_used));
+      rocm_async_copy |= rocm_used;
 
       content_offset += content_size;
       content_idx++;
@@ -1223,13 +1223,13 @@ EnsembleContext::CheckAndSetEnsembleOutput(
     }
   }
 
-  if (cuda_async_copy) {
-#ifdef TRITON_ENABLE_GPU
-    cudaStreamSynchronize(stream_);
+  if (rocm_async_copy) {
+#ifdef TRITON_ENABLE_ROCM
+    hipStreamSynchronize(stream_);
 #else
     return Status(
         Status::Code::INTERNAL,
-        "unexpected CUDA copy flag set while GPU is not supported");
+        "unexpected ROCM copy flag set while GPU is not supported");
 #endif  // TRITON_ENABLE_GPU
   }
 
@@ -1345,13 +1345,13 @@ EnsembleScheduler::EnsembleScheduler(
     : stats_aggregator_(stats_aggregator), is_(server), stream_(nullptr),
       inflight_count_(0)
 {
-#ifdef TRITON_ENABLE_GPU
-  // create CUDA stream
-  auto cuerr = cudaStreamCreate(&stream_);
-  if (cuerr != cudaSuccess) {
+#ifdef TRITON_ENABLE_ROCM
+  // create ROCM stream
+  auto cuerr = hipStreamCreate(&stream_);
+  if (cuerr != hipSuccess) {
     stream_ = nullptr;
     LOG_ERROR << "unable to create stream for " << config.name() << ": "
-              << cudaGetErrorString(cuerr);
+              << hipGetErrorString(cuerr);
   }
 #endif  // TRITON_ENABLE_GPU
 
@@ -1421,11 +1421,11 @@ EnsembleScheduler::EnsembleScheduler(
 
 EnsembleScheduler::~EnsembleScheduler()
 {
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
   if (stream_ != nullptr) {
-    cudaError_t err = cudaStreamDestroy(stream_);
-    if (err != cudaSuccess) {
-      LOG_ERROR << "Failed to destroy cuda stream: " << cudaGetErrorString(err);
+    hipError_t err = hipStreamDestroy(stream_);
+    if (err != hipSuccess) {
+      LOG_ERROR << "Failed to destroy rocm stream: " << hipGetErrorString(err);
     }
   }
 #endif  // TRITON_ENABLE_GPU

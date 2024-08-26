@@ -61,7 +61,7 @@ class PinnedMemoryManager {
   static Status Create(const Options& options);
 
   // Provide explicit control on ending the memory manager lifecycle,
-  // CUDA resource must be cleaned up before CUDA context is destroyed.
+  // ROCM resource must be cleaned up before ROCM context is destroyed.
   static void Reset();
 
   // Allocate pinned memory with the requested 'size' and return the pointer

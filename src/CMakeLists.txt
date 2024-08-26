@@ -203,7 +203,7 @@ set(
   tritonserver_apis.h
 )
 
-if(${TRITON_ENABLE_GPU})
+if(${TRITON_ENABLE_GPU} OR ${TRITON_ENABLE_ROCM})
   set(
     SERVER_SRCS
     ${SERVER_SRCS}
@@ -254,8 +254,8 @@ else()
   target_compile_options(
     triton-core
     PRIVATE
-      -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-declarations -Werror
-  )
+    -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-declarations -Werror -Wno-unused-result
+    )
   set_target_properties(
     triton-core
     PROPERTIES
@@ -384,6 +384,14 @@ if(${TRITON_ENABLE_MALI_GPU})
   )
 endif() # TRITON_ENABLE_MALI_GPU
 
+if(${TRITON_ENABLE_ROCM})
+  target_compile_definitions(
+    triton-core
+    PRIVATE TRITON_ENABLE_ROCM=1
+    PRIVATE TRITON_MIN_COMPUTE_CAPABILITY=${TRITON_MIN_COMPUTE_CAPABILITY}
+  )
+endif() # TRITON_ENABLE_ROCM
+
 if(${TRITON_ENABLE_METRICS})
   target_compile_definitions(
     triton-core
@@ -441,6 +449,17 @@ FOREACH(p ${TRITON_EXTRA_LIB_PATHS})
 ENDFOREACH(p)
 
 find_library(RE2_LIBRARY NAMES re2)
+
+if(${TRITON_ENABLE_ROCM})
+  find_package(hip REQUIRED)
+  find_package(HIP)
+  enable_language(HIP)
+  target_link_libraries(
+    triton-core
+    PUBLIC
+      hip::host
+  )
+endif() # TRITON_ENABLE_ROCM
 
 target_link_libraries(
   triton-core

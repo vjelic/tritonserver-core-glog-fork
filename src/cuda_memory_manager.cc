@@ -26,7 +26,9 @@
 //
 #include "cuda_memory_manager.h"
 
+#ifndef TRITON_ENABLE_ROCM
 #include <cnmem.h>
+#endif
 #include <string.h>
 
 #include <set>
@@ -36,13 +38,13 @@
 
 namespace {
 
-#define RETURN_IF_CNMEM_ERROR(S, MSG)                    \
+#define RETURN_IF_HIP_ERROR(S, MSG)                      \
   do {                                                   \
     auto status__ = (S);                                 \
-    if (status__ != CNMEM_STATUS_SUCCESS) {              \
+    if (status__ != hipSuccess) {                        \
       return Status(                                     \
           Status::Code::INTERNAL,                        \
-          (MSG) + ": " + cnmemGetErrorString(status__)); \
+          (MSG) + ": " + hipGetErrorString(status__));   \
     }                                                    \
   } while (false)
 
@@ -63,13 +65,15 @@ std::mutex CudaMemoryManager::instance_mu_;
 
 CudaMemoryManager::~CudaMemoryManager()
 {
+#ifndef TRITON_ENABLE_ROCM
   if (has_allocation_) {
     auto status = cnmemFinalize();
     if (status != CNMEM_STATUS_SUCCESS) {
-      LOG_ERROR << "Failed to finalize CUDA memory manager: [" << status << "] "
+      LOG_ERROR << "Failed to finalize ROCM memory manager: [" << status << "] "
                 << cnmemGetErrorString(status);
     }
   }
+#endif
 }
 
 void
@@ -82,10 +86,10 @@ CudaMemoryManager::Reset()
 Status
 CudaMemoryManager::Create(const CudaMemoryManager::Options& options)
 {
-  // Ensure thread-safe creation of CUDA memory pool
+  // Ensure thread-safe creation of ROCM memory pool
   std::lock_guard<std::mutex> lock(instance_mu_);
   if (instance_ != nullptr) {
-    LOG_WARNING << "New CUDA memory pools could not be created since they "
+    LOG_WARNING << "New ROCM memory pools could not be created since they "
                    "already exists";
     return Status::Success;
   }
@@ -94,6 +98,7 @@ CudaMemoryManager::Create(const CudaMemoryManager::Options& options)
   auto status = GetSupportedGPUs(
       &supported_gpus, options.min_supported_compute_capability_);
   if (status.IsOk()) {
+#ifndef TRITON_ENABLE_ROCM
     std::vector<cnmemDevice_t> devices;
     for (auto gpu : supported_gpus) {
       const auto it = options.memory_pool_byte_size_.find(gpu);
@@ -104,25 +109,26 @@ CudaMemoryManager::Create(const CudaMemoryManager::Options& options)
         device.device = gpu;
         device.size = it->second;
 
-        LOG_INFO << "CUDA memory pool is created on device " << device.device
+        LOG_INFO << "ROCM memory pool is created on device " << device.device
                  << " with size " << device.size;
       }
     }
 
     if (!devices.empty()) {
-      RETURN_IF_CNMEM_ERROR(
+      RETURN_IF_HIP_ERROR(
           cnmemInit(devices.size(), devices.data(), CNMEM_FLAGS_CANNOT_GROW),
-          std::string("Failed to finalize CUDA memory manager"));
+          std::string("Failed to finalize ROCM memory manager"));
     } else {
-      LOG_INFO << "CUDA memory pool disabled";
+      LOG_INFO << "ROCM memory pool disabled";
     }
+#endif
 
     // Use to finalize CNMeM properly when out of scope
-    instance_.reset(new CudaMemoryManager(!devices.empty()));
+    instance_.reset(new CudaMemoryManager(!supported_gpus.empty()));
   } else {
     return Status(
         status.ErrorCode(),
-        "Failed to initialize CUDA memory manager: " + status.Message());
+        "Failed to initialize ROCM memory manager: " + status.Message());
   }
 
   return Status::Success;
@@ -137,27 +143,27 @@ CudaMemoryManager::Alloc(void** ptr, uint64_t size, int64_t device_id)
   } else if (!instance_->has_allocation_) {
     return Status(
         Status::Code::UNAVAILABLE,
-        "CudaMemoryManager has no preallocated CUDA memory");
+        "CudaMemoryManager has no preallocated ROCM memory");
   }
 
   int current_device;
-  RETURN_IF_CUDA_ERR(
-      cudaGetDevice(&current_device), std::string("Failed to get device"));
+  RETURN_IF_ROCM_ERR(
+      hipGetDevice(&current_device), std::string("Failed to get device"));
   bool overridden = (current_device != device_id);
   if (overridden) {
-    RETURN_IF_CUDA_ERR(
-        cudaSetDevice(device_id), std::string("Failed to set device"));
+    RETURN_IF_ROCM_ERR(
+        hipSetDevice(device_id), std::string("Failed to set device"));
   }
 
   // Defer returning error to make sure the device is recovered
-  auto err = cnmemMalloc(ptr, size, nullptr);
+  auto err = hipMalloc(ptr, size);
 
   if (overridden) {
-    cudaSetDevice(current_device);
+    hipSetDevice(current_device);
   }
 
-  RETURN_IF_CNMEM_ERROR(
-      err, std::string("Failed to allocate CUDA memory with byte size ") +
+  RETURN_IF_HIP_ERROR(
+      err, std::string("Failed to allocate ROCM memory with byte size ") +
                std::to_string(size) + " on GPU " + std::to_string(device_id));
   return Status::Success;
 }
@@ -171,27 +177,27 @@ CudaMemoryManager::Free(void* ptr, int64_t device_id)
   } else if (!instance_->has_allocation_) {
     return Status(
         Status::Code::UNAVAILABLE,
-        "CudaMemoryManager has no preallocated CUDA memory");
+        "CudaMemoryManager has no preallocated ROCM memory");
   }
 
   int current_device;
-  RETURN_IF_CUDA_ERR(
-      cudaGetDevice(&current_device), std::string("Failed to get device"));
+  RETURN_IF_ROCM_ERR(
+      hipGetDevice(&current_device), std::string("Failed to get device"));
   bool overridden = (current_device != device_id);
   if (overridden) {
-    RETURN_IF_CUDA_ERR(
-        cudaSetDevice(device_id), std::string("Failed to set device"));
+    RETURN_IF_ROCM_ERR(
+        hipSetDevice(device_id), std::string("Failed to set device"));
   }
 
   // Defer returning error to make sure the device is recovered
-  auto err = cnmemFree(ptr, nullptr);
+  auto err = hipFree(ptr);
 
   if (overridden) {
-    cudaSetDevice(current_device);
+    hipSetDevice(current_device);
   }
 
-  RETURN_IF_CNMEM_ERROR(
-      err, std::string("Failed to deallocate CUDA memory at address ") +
+  RETURN_IF_HIP_ERROR(
+      err, std::string("Failed to deallocate ROCM memory at address ") +
                PointerToString(ptr) + " on GPU " + std::to_string(device_id));
   return Status::Success;
 }

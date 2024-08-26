@@ -88,8 +88,8 @@ struct DcgmMetadata {
   size_t field_count_ = 0;
   std::vector<unsigned short> fields_;
   // GPU Device Mapping
-  std::map<uint32_t, uint32_t> cuda_ids_to_dcgm_ids_;
-  std::vector<uint32_t> available_cuda_gpu_ids_;
+  std::map<uint32_t, uint32_t> rocm_ids_to_dcgm_ids_;
+  std::vector<uint32_t> available_rocm_gpu_ids_;
   // Stop attempting metrics if they fail multiple consecutive
   // times for a device.
   const int fail_threshold_ = 3;
@@ -141,9 +141,9 @@ class Metrics {
   // Get serialized metrics
   static const std::string SerializedMetrics();
 
-  // Get the UUID for a CUDA device. Return true and initialize 'uuid'
+  // Get the UUID for a ROCM device. Return true and initialize 'uuid'
   // if a UUID is found, return false if a UUID cannot be returned.
-  static bool UUIDForCudaDevice(int cuda_device, std::string* uuid);
+  static bool UUIDForCudaDevice(int rocm_device, std::string* uuid);
 
   // Metric family counting successful inference requests
   static prometheus::Family<prometheus::Counter>& FamilyInferenceSuccess()

@@ -36,7 +36,7 @@
 #include "triton/common/logging.h"
 
 #ifdef TRITON_ENABLE_METRICS_GPU
-#include <cuda_runtime_api.h>
+#include <hip/hip_runtime_api.h>
 #include <dcgm_agent.h>
 
 #include <cstring>
@@ -375,7 +375,7 @@ Metrics::StartPollingThread()
 #ifdef TRITON_ENABLE_METRICS_GPU
       // Poll DCGM GPU metrics
       if (gpu_metrics_enabled_ &&
-          dcgm_metadata_.available_cuda_gpu_ids_.size() > 0) {
+          dcgm_metadata_.available_rocm_gpu_ids_.size() > 0) {
         PollDcgmMetrics();
       }
 #endif  // TRITON_ENABLE_METRICS_GPU
@@ -539,7 +539,7 @@ Metrics::PollDcgmMetrics()
   return false;
 #else
 
-  if (dcgm_metadata_.available_cuda_gpu_ids_.size() == 0) {
+  if (dcgm_metadata_.available_rocm_gpu_ids_.size() == 0) {
     LOG_WARNING << "error polling GPU metrics, GPU metrics will not be "
                 << "available: no available gpus to poll";
     return false;
@@ -547,13 +547,13 @@ Metrics::PollDcgmMetrics()
 
   dcgmUpdateAllFields(dcgm_metadata_.dcgm_handle_, 1 /* wait for update*/);
   for (unsigned int didx = 0;
-       didx < dcgm_metadata_.available_cuda_gpu_ids_.size(); ++didx) {
-    uint32_t cuda_id = dcgm_metadata_.available_cuda_gpu_ids_[didx];
-    if (dcgm_metadata_.cuda_ids_to_dcgm_ids_.count(cuda_id) <= 0) {
-      LOG_WARNING << "Cannot find DCGM id for CUDA id " << cuda_id;
+       didx < dcgm_metadata_.available_rocm_gpu_ids_.size(); ++didx) {
+    uint32_t rocm_id = dcgm_metadata_.available_rocm_gpu_ids_[didx];
+    if (dcgm_metadata_.rocm_ids_to_dcgm_ids_.count(rocm_id) <= 0) {
+      LOG_WARNING << "Cannot find DCGM id for ROCM id " << rocm_id;
       continue;
     }
-    uint32_t dcgm_id = dcgm_metadata_.cuda_ids_to_dcgm_ids_.at(cuda_id);
+    uint32_t dcgm_id = dcgm_metadata_.rocm_ids_to_dcgm_ids_.at(rocm_id);
     dcgmFieldValue_v1 field_values[dcgm_metadata_.field_count_];
     dcgmReturn_t dcgmerr = dcgmGetLatestValuesForFields(
         dcgm_metadata_.dcgm_handle_, dcgm_id, dcgm_metadata_.fields_.data(),
@@ -565,7 +565,7 @@ Metrics::PollDcgmMetrics()
       dcgm_metadata_.energy_fail_cnt_[didx]++;
       dcgm_metadata_.util_fail_cnt_[didx]++;
       dcgm_metadata_.mem_fail_cnt_[didx]++;
-      LOG_WARNING << "Unable to get field values for GPU ID " << cuda_id << ": "
+      LOG_WARNING << "Unable to get field values for GPU ID " << rocm_id << ": "
                   << errorString(dcgmerr);
     } else {
       // Power limit
@@ -579,7 +579,7 @@ Metrics::PollDcgmMetrics()
           dcgm_metadata_.power_limit_fail_cnt_[didx]++;
           power_limit = 0;
           dcgmReturn_t status = dcgmReturn_t(field_values[0].status);
-          LOG_WARNING << "Unable to get power limit for GPU " << cuda_id
+          LOG_WARNING << "Unable to get power limit for GPU " << rocm_id
                       << ". Status:" << errorString(status)
                       << ", value:" << dcgmValueToErrorMessage(power_limit);
         }
@@ -597,7 +597,7 @@ Metrics::PollDcgmMetrics()
           dcgm_metadata_.power_usage_fail_cnt_[didx]++;
           power_usage = 0;
           dcgmReturn_t status = dcgmReturn_t(field_values[1].status);
-          LOG_WARNING << "Unable to get power usage for GPU " << cuda_id
+          LOG_WARNING << "Unable to get power usage for GPU " << rocm_id
                       << ". Status:" << errorString(status)
                       << ", value:" << dcgmValueToErrorMessage(power_usage);
         }
@@ -622,7 +622,7 @@ Metrics::PollDcgmMetrics()
           energy = 0;
           dcgmReturn_t status = dcgmReturn_t(field_values[2].status);
           LOG_WARNING << "Unable to get energy consumption for "
-                      << "GPU " << cuda_id << ". Status:" << errorString(status)
+                      << "GPU " << rocm_id << ". Status:" << errorString(status)
                       << ", value:" << dcgmValueToErrorMessage(energy);
         }
       }
@@ -638,7 +638,7 @@ Metrics::PollDcgmMetrics()
           dcgm_metadata_.util_fail_cnt_[didx]++;
           util = 0;
           dcgmReturn_t status = dcgmReturn_t(field_values[3].status);
-          LOG_WARNING << "Unable to get GPU utilization for GPU " << cuda_id
+          LOG_WARNING << "Unable to get GPU utilization for GPU " << rocm_id
                       << ". Status:" << errorString(status)
                       << ", value:" << dcgmValueToErrorMessage(util);
         }
@@ -660,7 +660,7 @@ Metrics::PollDcgmMetrics()
           dcgm_metadata_.mem_fail_cnt_[didx]++;
           dcgmReturn_t usageStatus = dcgmReturn_t(field_values[4].status);
           dcgmReturn_t memoryTotaltatus = dcgmReturn_t(field_values[5].status);
-          LOG_WARNING << "Unable to get memory usage for GPU " << cuda_id
+          LOG_WARNING << "Unable to get memory usage for GPU " << rocm_id
                       << ". Memory usage status:" << errorString(usageStatus)
                       << ", value:" << dcgmValueToErrorMessage(memory_used)
                       << ". Memory total status:"
@@ -794,26 +794,26 @@ Metrics::InitializeDcgmMetrics()
   }
 
 
-  // Get CUDA-visible PCI Bus Ids and get DCGM metrics for each CUDA-visible GPU
-  int cuda_gpu_count;
-  cudaError_t cudaerr = cudaGetDeviceCount(&cuda_gpu_count);
-  if (cudaerr != cudaSuccess) {
+  // Get ROCM-visible PCI Bus Ids and get DCGM metrics for each ROCM-visible GPU
+  int rocm_gpu_count;
+  hipError_t rocmerr = hipGetDeviceCount(&rocm_gpu_count);
+  if (rocmerr != hipSuccess) {
     LOG_WARNING
-        << "Cannot get CUDA device count, GPU metrics will not be available";
+        << "Cannot get ROCM device count, GPU metrics will not be available";
     return false;
   }
-  for (int i = 0; i < cuda_gpu_count; ++i) {
+  for (int i = 0; i < rocm_gpu_count; ++i) {
     std::string pci_bus_id = "0000";  // pad 0's for uniformity
     char pcibusid_str[64];
-    cudaerr = cudaDeviceGetPCIBusId(pcibusid_str, sizeof(pcibusid_str) - 1, i);
-    if (cudaerr == cudaSuccess) {
+    rocmerr = hipDeviceGetPCIBusId(pcibusid_str, sizeof(pcibusid_str) - 1, i);
+    if (rocmerr == hipSuccess) {
       pci_bus_id.append(pcibusid_str);
       if (pci_bus_id_to_dcgm_id.count(pci_bus_id) <= 0) {
         LOG_INFO << "Skipping GPU:" << i
-                 << " since it's not CUDA enabled. This should never happen!";
+                 << " since it's not ROCM enabled. This should never happen!";
         continue;
       }
-      // Filter out CUDA visible GPUs from GPUs found by DCGM
+      // Filter out ROCM visible GPUs from GPUs found by DCGM
       LOG_INFO << "Collecting metrics for GPU " << i << ": "
                << pci_bus_id_to_device_name[pci_bus_id];
       auto& gpu_labels = pci_bus_id_to_gpu_labels[pci_bus_id];
@@ -825,8 +825,8 @@ Metrics::InitializeDcgmMetrics()
       gpu_energy_consumption_.push_back(
           &gpu_energy_consumption_family_.Add(gpu_labels));
       uint32_t dcgm_id = pci_bus_id_to_dcgm_id[pci_bus_id];
-      dcgm_metadata_.cuda_ids_to_dcgm_ids_[i] = dcgm_id;
-      dcgm_metadata_.available_cuda_gpu_ids_.emplace_back(i);
+      dcgm_metadata_.rocm_ids_to_dcgm_ids_[i] = dcgm_id;
+      dcgm_metadata_.available_rocm_gpu_ids_.emplace_back(i);
     } else {
       LOG_WARNING << "GPU metrics will not be available for device:" << i;
     }
@@ -843,7 +843,7 @@ Metrics::InitializeDcgmMetrics()
 
   // Initialize tracking vectors
   for (unsigned int didx = 0;
-       didx < dcgm_metadata_.available_cuda_gpu_ids_.size(); ++didx) {
+       didx < dcgm_metadata_.available_rocm_gpu_ids_.size(); ++didx) {
     dcgm_metadata_.power_limit_fail_cnt_.push_back(0);
     dcgm_metadata_.power_usage_fail_cnt_.push_back(0);
     dcgm_metadata_.energy_fail_cnt_.push_back(0);
@@ -932,10 +932,10 @@ Metrics::dcgmValueToErrorMessage(int64_t val)
 #endif  // TRITON_ENABLE_METRICS_GPU
 
 bool
-Metrics::UUIDForCudaDevice(int cuda_device, std::string* uuid)
+Metrics::UUIDForCudaDevice(int rocm_device, std::string* uuid)
 {
   // If metrics were not initialized then just silently fail since
-  // with DCGM we can't get the CUDA device (and not worth doing
+  // with DCGM we can't get the ROCM device (and not worth doing
   // anyway since metrics aren't being reported).
   auto singleton = GetSingleton();
   if (!singleton->gpu_metrics_enabled_) {
@@ -950,7 +950,7 @@ Metrics::UUIDForCudaDevice(int cuda_device, std::string* uuid)
   dcgmDeviceAttributes_t gpu_attributes;
   gpu_attributes.version = dcgmDeviceAttributes_version;
   dcgmReturn_t dcgmerr = dcgmGetDeviceAttributes(
-      singleton->dcgm_metadata_.dcgm_handle_, cuda_device, &gpu_attributes);
+      singleton->dcgm_metadata_.dcgm_handle_, rocm_device, &gpu_attributes);
   if (dcgmerr != DCGM_ST_OK) {
     LOG_ERROR << "Unable to get device UUID: " << errorString(dcgmerr);
     return false;

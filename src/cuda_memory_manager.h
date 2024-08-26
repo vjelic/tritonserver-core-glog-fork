@@ -34,12 +34,12 @@
 
 namespace triton { namespace core {
 
-// This is a singleton class responsible for maintaining CUDA memory pool
-// used by the inference server. CUDA memory allocations and deallocations
+// This is a singleton class responsible for maintaining ROCM memory pool
+// used by the inference server. ROCM memory allocations and deallocations
 // must be requested via functions provided by this class.
 class CudaMemoryManager {
  public:
-  // Options to configure CUDA memory manager.
+  // Options to configure ROCM memory manager.
   struct Options {
     Options(double cc = 6.0, const std::map<int, uint64_t>& s = {})
         : min_supported_compute_capability_(cc), memory_pool_byte_size_(s)
@@ -49,7 +49,7 @@ class CudaMemoryManager {
     // The minimum compute capability of the supported devices.
     double min_supported_compute_capability_;
 
-    // The size of CUDA memory reserved for the specified devices.
+    // The size of ROCM memory reserved for the specified devices.
     // The memory size will be rounded up to align with
     // the default granularity (512 bytes).
     // No memory will be reserved for devices that is not listed.
@@ -63,10 +63,10 @@ class CudaMemoryManager {
   static Status Create(const Options& options);
 
   // Provide explicit control on ending the memory manager lifecycle,
-  // CUDA resource must be cleaned up before CUDA context is destroyed.
+  // ROCM resource must be cleaned up before ROCM context is destroyed.
   static void Reset();
 
-  // Allocate CUDA memory on GPU 'device_id' with
+  // Allocate ROCM memory on GPU 'device_id' with
   // the requested 'size' and return the pointer in 'ptr'.
   // Return Status object indicating success or failure.
   static Status Alloc(void** ptr, uint64_t size, int64_t device_id);

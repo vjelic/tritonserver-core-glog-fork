@@ -133,7 +133,7 @@ Status
 BackendConfigurationMinComputeCapability(
     const triton::common::BackendCmdlineConfigMap& config_map, double* mcc)
 {
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
   *mcc = TRITON_MIN_COMPUTE_CAPABILITY;
 #else
   *mcc = 0;

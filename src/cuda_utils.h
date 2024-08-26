@@ -30,25 +30,25 @@
 #include "status.h"
 #include "triton/common/sync_queue.h"
 
-#ifdef TRITON_ENABLE_GPU
-#include <cuda_runtime_api.h>
+#ifdef TRITON_ENABLE_ROCM
+#include <hip/hip_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
 namespace triton { namespace core {
 
-#ifdef TRITON_ENABLE_GPU
-#define RETURN_IF_CUDA_ERR(X, MSG)                                           \
+#ifdef TRITON_ENABLE_ROCM
+#define RETURN_IF_ROCM_ERR(X, MSG)                                           \
   do {                                                                       \
-    cudaError_t err__ = (X);                                                 \
-    if (err__ != cudaSuccess) {                                              \
+    hipError_t err__ = (X);                                                 \
+    if (err__ != hipSuccess) {                                              \
       return Status(                                                         \
-          Status::Code::INTERNAL, (MSG) + ": " + cudaGetErrorString(err__)); \
+          Status::Code::INTERNAL, (MSG) + ": " + hipGetErrorString(err__)); \
     }                                                                        \
   } while (false)
 #endif  // TRITON_ENABLE_GPU
 
-#ifndef TRITON_ENABLE_GPU
-using cudaStream_t = void*;
+#ifndef TRITON_ENABLE_ROCM
+using hipStream_t = void*;
 #endif  // !TRITON_ENABLE_GPU
 
 /// Get the memory info for the specified device.
@@ -59,7 +59,7 @@ using cudaStream_t = void*;
 Status GetDeviceMemoryInfo(const int device_id, size_t* free, size_t* total);
 
 /// Enable peer access for all GPU device pairs
-/// \param min_compute_capability The minimum support CUDA compute
+/// \param min_compute_capability The minimum support ROCM compute
 /// capability.
 /// \return The error status. A non-OK status means not all pairs are enabled
 Status EnablePeerAccess(const double min_compute_capability);
@@ -75,13 +75,13 @@ Status EnablePeerAccess(const double min_compute_capability);
 /// \param byte_size The size in bytes to me copied from source to destination.
 /// \param src The buffer start address of the source.
 /// \param dst The buffer start address of the destination.
-/// \param cuda_stream The stream to be associated with, and 0 can be
+/// \param hip_stream The stream to be associated with, and 0 can be
 /// passed for default stream.
-/// \param cuda_used returns whether a CUDA memory copy is initiated. If true,
-/// the caller should synchronize on the given 'cuda_stream' to ensure data copy
+/// \param rocm_used returns whether a ROCM memory copy is initiated. If true,
+/// the caller should synchronize on the given 'hip_stream' to ensure data copy
 /// is completed.
-/// \param copy_on_stream whether the memory copies should be performed in cuda
-/// host functions on the 'cuda_stream'.
+/// \param copy_on_stream whether the memory copies should be performed in rocm
+/// host functions on the 'hip_stream'.
 /// \return The error status. A non-ok status indicates failure to copy the
 /// buffer.
 Status CopyBuffer(
@@ -89,13 +89,13 @@ Status CopyBuffer(
     const int64_t src_memory_type_id,
     const TRITONSERVER_MemoryType dst_memory_type,
     const int64_t dst_memory_type_id, const size_t byte_size, const void* src,
-    void* dst, cudaStream_t cuda_stream, bool* cuda_used,
+    void* dst, hipStream_t hip_stream, bool* rocm_used,
     bool copy_on_stream = false);
 
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
 /// Validates the compute capability of the GPU indexed
 /// \param gpu_id The index of the target GPU.
-/// \param min_compute_capability The minimum support CUDA compute
+/// \param min_compute_capability The minimum support ROCM compute
 /// capability.
 /// \return The error status. A non-OK status means the target GPU is
 /// not supported.
@@ -105,7 +105,7 @@ Status CheckGPUCompatibility(
 /// Obtains a set of gpu ids that is supported by triton.
 /// \param supported_gpus Returns the set of integers which is
 ///  populated by ids of supported GPUS
-/// \param min_compute_capability The minimum support CUDA compute
+/// \param min_compute_capability The minimum support ROCM compute
 /// capability.
 /// \return The error status. A non-ok status means there were
 /// errors encountered while querying GPU devices.
@@ -121,13 +121,13 @@ Status SupportsIntegratedZeroCopy(const int gpu_id, bool* zero_copy_support);
 #endif
 
 // Helper around CopyBuffer that updates the completion queue with the returned
-// status and cuda_used flag.
+// status and rocm_used flag.
 void CopyBufferHandler(
     const std::string& msg, const TRITONSERVER_MemoryType src_memory_type,
     const int64_t src_memory_type_id,
     const TRITONSERVER_MemoryType dst_memory_type,
     const int64_t dst_memory_type_id, const size_t byte_size, const void* src,
-    void* dst, cudaStream_t cuda_stream, void* response_ptr,
+    void* dst, hipStream_t hip_stream, void* response_ptr,
     triton::common::SyncQueue<std::tuple<Status, bool, void*>>*
         completion_queue);
 

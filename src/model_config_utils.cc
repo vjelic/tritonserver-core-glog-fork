@@ -44,8 +44,8 @@
 #define TRITONJSON_STATUSSUCCESS triton::core::Status::Success
 #include "triton/common/triton_json.h"
 
-#ifdef TRITON_ENABLE_GPU
-#include <cuda_runtime_api.h>
+#ifdef TRITON_ENABLE_ROCM
+#include <hip/hip_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
 namespace triton { namespace core {
@@ -761,7 +761,7 @@ NormalizeInstanceGroup(
 
   // Creates a set of supported GPU device ids
   std::set<int> supported_gpus;
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
   // Get the total number of GPUs from the runtime library.
   Status status = GetSupportedGPUs(&supported_gpus, min_compute_capability);
   if (!status.IsOk()) {
@@ -1585,7 +1585,7 @@ ValidateInstanceGroup(
   // Make sure KIND_GPU instance group specifies at least one GPU and
   // doesn't specify a non-existent GPU. Make sure non-KIND_GPU does
   // not specify any GPUs.
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
   std::set<int> supported_gpus;
   Status status = GetSupportedGPUs(&supported_gpus, min_compute_capability);
   if (!status.IsOk()) {
@@ -1602,12 +1602,12 @@ ValidateInstanceGroup(
                 " has kind KIND_MODEL but specifies one or more GPUs");
       }
     } else if (group.kind() == inference::ModelInstanceGroup::KIND_GPU) {
-#if !defined(TRITON_ENABLE_GPU) && !defined(TRITON_ENABLE_MALI_GPU)
+#if !defined(TRITON_ENABLE_ROCM) && !defined(TRITON_ENABLE_MALI_GPU)
       return Status(
           Status::Code::INVALID_ARG,
           "instance group " + group.name() + " of model " + config.name() +
               " has kind KIND_GPU but server does not support GPUs");
-#elif defined(TRITON_ENABLE_GPU)
+#elif defined(TRITON_ENABLE_ROCM)
       if (group.gpus().size() == 0) {
         if (supported_gpus.size() == 0) {
           return Status(
@@ -1636,7 +1636,7 @@ ValidateInstanceGroup(
               "instance group " + group.name() + " of model " + config.name() +
                   " specifies invalid or unsupported gpu id " +
                   std::to_string(gid) +
-                  ". GPUs with at least the minimum required CUDA compute "
+                  ". GPUs with at least the minimum required ROCM compute "
                   "compatibility of " +
                   std::to_string(min_compute_capability) +
                   " are: " + supported_gpus_str);
@@ -1883,6 +1883,7 @@ ValidateModelConfigInt64()
     LOG_VERBOSE(1) << "\t" << f;
   }
 
+#ifndef TRITON_ENABLE_ROCM
   // We expect to find exactly the following fields. If we get an
   // error from this code ModelConfig has added or removed a 64-bit
   // field and we need to adjust here and in ModelConfigToJson below.
@@ -1907,8 +1908,8 @@ ValidateModelConfigInt64()
       "ModelConfig::sequence_batching::max_sequence_idle_microseconds",
       "ModelConfig::ensemble_scheduling::step::model_version",
       "ModelConfig::model_warmup::inputs::value::dims",
-      "ModelConfig::optimization::cuda::graph_spec::input::value::dim",
-      "ModelConfig::optimization::cuda::graph_spec::graph_lower_bound::input::"
+      "ModelConfig::optimization::rocm::graph_spec::input::value::dim",
+      "ModelConfig::optimization::rocm::graph_spec::graph_lower_bound::input::"
       "value::dim",
       "ModelConfig::instance_group::secondary_devices::device_id"};
 
@@ -1916,6 +1917,7 @@ ValidateModelConfigInt64()
     return Status(
         Status::Code::INTERNAL, "ModelConfig 64-bit field needs update");
   }
+#endif // !TRITON_ENABLE_ROCM
 
   return Status::Success;
 }

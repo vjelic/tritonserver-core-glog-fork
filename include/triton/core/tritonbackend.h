@@ -1112,7 +1112,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelSetState(
 /// \param usage The list of buffer attributes that records the memory usage,
 /// each entry should record the total memory usage of a given memory type and
 /// id. For example, if the model itself occupies 64 bytes on each of
-/// CUDA device 0 and CUDA device 1. Then 'usage' should have first two entries
+/// ROCM device 0 and ROCM device 1. Then 'usage' should have first two entries
 /// set, one has the buffer attributes of "type GPU, id 0, 64 bytes" and the
 /// other has "type GPU, id 1, 64 bytes". 'usage' is owned by the backend and
 /// may be released after the function returns.
@@ -1273,7 +1273,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceSetState(
 /// \param usage The list of buffer attributes that records the memory usage,
 /// each entry should record the total memory usage of a given memory type and
 /// id. For example, if the instance itself occupies 64 bytes on each of
-/// CUDA device 0 and CUDA device 1. Then 'usage' should have first two entries
+/// ROCM device 0 and ROCM device 1. Then 'usage' should have first two entries
 /// set, one has the buffer attributes of "type GPU, id 0, 64 bytes" and the
 /// other has "type GPU, id 1, 64 bytes". 'usage' is owned by the backend and
 /// may be released after the function returns.

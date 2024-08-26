@@ -31,8 +31,8 @@
 
 namespace triton { namespace core {
 
-#ifdef TRITON_ENABLE_GPU
-void CUDART_CB
+#ifdef TRITON_ENABLE_ROCM
+static void
 MemcpyHost(void* args)
 {
   auto* copy_params = reinterpret_cast<CopyParams*>(args);
@@ -46,32 +46,32 @@ GetDeviceMemoryInfo(const int device_id, size_t* free, size_t* total)
 {
   *free = 0;
   *total = 0;
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
   // Make sure that correct device is set before creating stream and
   // then restore the device to what was set by the caller.
   int current_device;
-  auto cuerr = cudaGetDevice(&current_device);
+  auto cuerr = hipGetDevice(&current_device);
   bool overridden = false;
-  if (cuerr == cudaSuccess) {
+  if (cuerr == hipSuccess) {
     overridden = (current_device != device_id);
     if (overridden) {
-      cuerr = cudaSetDevice(device_id);
+      cuerr = hipSetDevice(device_id);
     }
   }
 
-  if (cuerr == cudaSuccess) {
-    cuerr = cudaMemGetInfo(free, total);
+  if (cuerr == hipSuccess) {
+    cuerr = hipMemGetInfo(free, total);
   }
 
   if (overridden) {
-    cudaSetDevice(current_device);
+    hipSetDevice(current_device);
   }
 
-  if (cuerr != cudaSuccess) {
+  if (cuerr != hipSuccess) {
     return Status(
         Status::Code::INTERNAL,
         (std::string("unable to get memory info for device ") +
-         std::to_string(device_id) + ": " + cudaGetErrorString(cuerr)));
+         std::to_string(device_id) + ": " + hipGetErrorString(cuerr)));
   }
 #endif  // TRITON_ENABLE_GPU
   return Status::Success;
@@ -80,7 +80,7 @@ GetDeviceMemoryInfo(const int device_id, size_t* free, size_t* total)
 Status
 EnablePeerAccess(const double min_compute_capability)
 {
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
   // If we can't enable peer access for one device pair, the best we can
   // do is skipping it...
   std::set<int> supported_gpus;
@@ -89,20 +89,20 @@ EnablePeerAccess(const double min_compute_capability)
     all_enabled = true;
     int can_access_peer = false;
     for (const auto& host : supported_gpus) {
-      auto cuerr = cudaSetDevice(host);
+      auto cuerr = hipSetDevice(host);
 
-      if (cuerr == cudaSuccess) {
+      if (cuerr == hipSuccess) {
         for (const auto& peer : supported_gpus) {
           if (host == peer) {
             continue;
           }
 
-          cuerr = cudaDeviceCanAccessPeer(&can_access_peer, host, peer);
-          if ((cuerr == cudaSuccess) && (can_access_peer == 1)) {
-            cuerr = cudaDeviceEnablePeerAccess(peer, 0);
+          cuerr = hipDeviceCanAccessPeer(&can_access_peer, host, peer);
+          if ((cuerr == hipSuccess) && (can_access_peer == 1)) {
+            cuerr = hipDeviceEnablePeerAccess(peer, 0);
           }
 
-          all_enabled &= ((cuerr == cudaSuccess) && (can_access_peer == 1));
+          all_enabled &= ((cuerr == hipSuccess) && (can_access_peer == 1));
         }
       }
     }
@@ -122,23 +122,23 @@ CopyBuffer(
     const int64_t src_memory_type_id,
     const TRITONSERVER_MemoryType dst_memory_type,
     const int64_t dst_memory_type_id, const size_t byte_size, const void* src,
-    void* dst, cudaStream_t cuda_stream, bool* cuda_used, bool copy_on_stream)
+    void* dst, hipStream_t hip_stream, bool* rocm_used, bool copy_on_stream)
 {
   NVTX_RANGE(nvtx_, "CopyBuffer");
 
-  *cuda_used = false;
+  *rocm_used = false;
 
-  // For CUDA memcpy, all host to host copy will be blocked in respect to the
+  // For ROCM memcpy, all host to host copy will be blocked in respect to the
   // host, so use memcpy() directly. In this case, need to be careful on whether
   // the src buffer is valid.
   if ((src_memory_type != TRITONSERVER_MEMORY_GPU) &&
       (dst_memory_type != TRITONSERVER_MEMORY_GPU)) {
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
     if (copy_on_stream) {
       auto params = new CopyParams(dst, src, byte_size);
-      cudaLaunchHostFunc(
-          cuda_stream, MemcpyHost, reinterpret_cast<void*>(params));
-      *cuda_used = true;
+      hipLaunchHostFunc(
+          hip_stream, MemcpyHost, reinterpret_cast<void*>(params));
+      *rocm_used = true;
     } else {
       memcpy(dst, src, byte_size);
     }
@@ -146,16 +146,16 @@ CopyBuffer(
     memcpy(dst, src, byte_size);
 #endif  // TRITON_ENABLE_GPU
   } else {
-#ifdef TRITON_ENABLE_GPU
-    RETURN_IF_CUDA_ERR(
-        cudaMemcpyAsync(dst, src, byte_size, cudaMemcpyDefault, cuda_stream),
-        msg + ": failed to perform CUDA copy");
+#ifdef TRITON_ENABLE_ROCM
+    RETURN_IF_ROCM_ERR(
+        hipMemcpyAsync(dst, src, byte_size, hipMemcpyDefault, hip_stream),
+        msg + ": failed to perform ROCM copy");
 
-    *cuda_used = true;
+    *rocm_used = true;
 #else
     return Status(
         Status::Code::INTERNAL,
-        msg + ": try to use CUDA copy while GPU is not supported");
+        msg + ": try to use ROCM copy while GPU is not supported");
 #endif  // TRITON_ENABLE_GPU
   }
 
@@ -168,29 +168,29 @@ CopyBufferHandler(
     const int64_t src_memory_type_id,
     const TRITONSERVER_MemoryType dst_memory_type,
     const int64_t dst_memory_type_id, const size_t byte_size, const void* src,
-    void* dst, cudaStream_t cuda_stream, void* response_ptr,
+    void* dst, hipStream_t hip_stream, void* response_ptr,
     triton::common::SyncQueue<std::tuple<Status, bool, void*>>*
         completion_queue)
 {
-  bool cuda_used = false;
+  bool rocm_used = false;
   Status status = CopyBuffer(
       msg, src_memory_type, src_memory_type_id, dst_memory_type,
-      dst_memory_type_id, byte_size, src, dst, cuda_stream, &cuda_used);
-  completion_queue->Put(std::make_tuple(status, cuda_used, response_ptr));
+      dst_memory_type_id, byte_size, src, dst, hip_stream, &rocm_used);
+  completion_queue->Put(std::make_tuple(status, rocm_used, response_ptr));
 }
 
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
 Status
 CheckGPUCompatibility(const int gpu_id, const double min_compute_capability)
 {
   // Query the compute capability from the device
-  cudaDeviceProp cuprops;
-  cudaError_t cuerr = cudaGetDeviceProperties(&cuprops, gpu_id);
-  if (cuerr != cudaSuccess) {
+  hipDeviceProp_t cuprops;
+  hipError_t cuerr = hipGetDeviceProperties(&cuprops, gpu_id);
+  if (cuerr != hipSuccess) {
     return Status(
         Status::Code::INTERNAL,
-        "unable to get CUDA device properties for GPU ID" +
-            std::to_string(gpu_id) + ": " + cudaGetErrorString(cuerr));
+        "unable to get ROCM device properties for GPU ID" +
+            std::to_string(gpu_id) + ": " + hipGetErrorString(cuerr));
   }
 
   double compute_compability = cuprops.major + (cuprops.minor / 10.0);
@@ -216,13 +216,13 @@ GetSupportedGPUs(
   supported_gpus->clear();
 
   int device_cnt;
-  cudaError_t cuerr = cudaGetDeviceCount(&device_cnt);
-  if ((cuerr == cudaErrorNoDevice) || (cuerr == cudaErrorInsufficientDriver)) {
+  hipError_t cuerr = hipGetDeviceCount(&device_cnt);
+  if ((cuerr == hipErrorNoDevice) || (cuerr == hipErrorInsufficientDriver)) {
     device_cnt = 0;
-  } else if (cuerr != cudaSuccess) {
+  } else if (cuerr != hipSuccess) {
     return Status(
-        Status::Code::INTERNAL, "unable to get number of CUDA devices: " +
-                                    std::string(cudaGetErrorString(cuerr)));
+        Status::Code::INTERNAL, "unable to get number of ROCM devices: " +
+                                    std::string(hipGetErrorString(cuerr)));
   }
 
   // populates supported_gpus
@@ -239,13 +239,13 @@ Status
 SupportsIntegratedZeroCopy(const int gpu_id, bool* zero_copy_support)
 {
   // Query the device to check if integrated
-  cudaDeviceProp cuprops;
-  cudaError_t cuerr = cudaGetDeviceProperties(&cuprops, gpu_id);
-  if (cuerr != cudaSuccess) {
+  hipDeviceProp_t cuprops;
+  hipError_t cuerr = hipGetDeviceProperties(&cuprops, gpu_id);
+  if (cuerr != hipSuccess) {
     return Status(
         Status::Code::INTERNAL,
-        "unable to get CUDA device properties for GPU ID" +
-            std::to_string(gpu_id) + ": " + cudaGetErrorString(cuerr));
+        "unable to get ROCM device properties for GPU ID" +
+            std::to_string(gpu_id) + ": " + hipGetErrorString(cuerr));
   }
 
   // Zero-copy supported only on integrated GPU when it can map host memory

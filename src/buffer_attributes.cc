@@ -50,22 +50,22 @@ BufferAttributes::SetMemoryTypeId(const int64_t& memory_type_id)
 }
 
 void
-BufferAttributes::SetCudaIpcHandle(void* cuda_ipc_handle)
+BufferAttributes::SetCudaIpcHandle(void* rocm_ipc_handle)
 {
-  char* lcuda_ipc_handle = reinterpret_cast<char*>(cuda_ipc_handle);
-  cuda_ipc_handle_.clear();
+  char* lrocm_ipc_handle = reinterpret_cast<char*>(rocm_ipc_handle);
+  rocm_ipc_handle_.clear();
   std::copy(
-      lcuda_ipc_handle, lcuda_ipc_handle + CUDA_IPC_STRUCT_SIZE,
-      std::back_inserter(cuda_ipc_handle_));
+      lrocm_ipc_handle, lrocm_ipc_handle + ROCM_IPC_STRUCT_SIZE,
+      std::back_inserter(rocm_ipc_handle_));
 }
 
 void*
 BufferAttributes::CudaIpcHandle()
 {
-  if (cuda_ipc_handle_.empty()) {
+  if (rocm_ipc_handle_.empty()) {
     return nullptr;
   } else {
-    return reinterpret_cast<void*>(cuda_ipc_handle_.data());
+    return reinterpret_cast<void*>(rocm_ipc_handle_.data());
   }
 }
 
@@ -89,17 +89,17 @@ BufferAttributes::MemoryTypeId() const
 
 BufferAttributes::BufferAttributes(
     size_t byte_size, TRITONSERVER_MemoryType memory_type,
-    int64_t memory_type_id, char* cuda_ipc_handle)
+    int64_t memory_type_id, char* rocm_ipc_handle)
     : byte_size_(byte_size), memory_type_(memory_type),
       memory_type_id_(memory_type_id)
 {
-  // cuda ipc handle size
-  cuda_ipc_handle_.reserve(CUDA_IPC_STRUCT_SIZE);
+  // rocm ipc handle size
+  rocm_ipc_handle_.reserve(ROCM_IPC_STRUCT_SIZE);
 
-  if (cuda_ipc_handle != nullptr) {
+  if (rocm_ipc_handle != nullptr) {
     std::copy(
-        cuda_ipc_handle, cuda_ipc_handle + CUDA_IPC_STRUCT_SIZE,
-        std::back_inserter(cuda_ipc_handle_));
+        rocm_ipc_handle, rocm_ipc_handle + ROCM_IPC_STRUCT_SIZE,
+        std::back_inserter(rocm_ipc_handle_));
   }
 }
 }}  // namespace triton::core

@@ -210,18 +210,18 @@ class InferenceServer {
   std::string CacheDir() const { return cache_dir_; }
   void SetCacheDir(std::string dir) { cache_dir_ = dir; }
 
-  // Get / set CUDA memory pool size
+  // Get / set ROCM memory pool size
   const std::map<int, uint64_t>& CudaMemoryPoolByteSize() const
   {
-    return cuda_memory_pool_size_;
+    return rocm_memory_pool_size_;
   }
 
   void SetCudaMemoryPoolByteSize(const std::map<int, uint64_t>& s)
   {
-    cuda_memory_pool_size_ = s;
+    rocm_memory_pool_size_ = s;
   }
 
-  // Get / set the minimum support CUDA compute capability.
+  // Get / set the minimum support ROCM compute capability.
   double MinSupportedComputeCapability() const
   {
     return min_supported_compute_capability_;
@@ -328,7 +328,7 @@ class InferenceServer {
   bool response_cache_enabled_;
   CacheConfigMap cache_config_map_;
   std::string cache_dir_;
-  std::map<int, uint64_t> cuda_memory_pool_size_;
+  std::map<int, uint64_t> rocm_memory_pool_size_;
   double min_supported_compute_capability_;
   triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
   triton::common::HostPolicyCmdlineConfigMap host_policy_map_;

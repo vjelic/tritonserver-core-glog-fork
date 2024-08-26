@@ -32,8 +32,8 @@
 #include "numa_utils.h"
 #include "triton/common/logging.h"
 
-#ifdef TRITON_ENABLE_GPU
-#include <cuda_runtime_api.h>
+#ifdef TRITON_ENABLE_ROCM
+#include <hip/hip_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
 namespace triton { namespace core {
@@ -80,9 +80,9 @@ PinnedMemoryManager::PinnedMemory::PinnedMemory(
 
 PinnedMemoryManager::PinnedMemory::~PinnedMemory()
 {
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
   if (pinned_memory_buffer_ != nullptr) {
-    cudaFreeHost(pinned_memory_buffer_);
+    hipHostFree(pinned_memory_buffer_);
   }
 #endif  // TRITON_ENABLE_GPU
 }
@@ -229,14 +229,14 @@ PinnedMemoryManager::Create(const Options& options)
   instance_.reset(new PinnedMemoryManager());
   if (options.host_policy_map_.empty()) {
     void* buffer = nullptr;
-#ifdef TRITON_ENABLE_GPU
-    auto err = cudaHostAlloc(
-        &buffer, options.pinned_memory_pool_byte_size_, cudaHostAllocPortable);
-    if (err != cudaSuccess) {
+#ifdef TRITON_ENABLE_ROCM
+    auto err = hipHostMalloc(
+        &buffer, options.pinned_memory_pool_byte_size_, hipHostMallocPortable);
+    if (err != hipSuccess) {
       buffer = nullptr;
       LOG_WARNING << "Unable to allocate pinned system memory, pinned memory "
                      "pool will not be available: "
-                  << std::string(cudaGetErrorString(err));
+                  << std::string(hipGetErrorString(err));
     } else if (options.pinned_memory_pool_byte_size_ != 0) {
       LOG_INFO << "Pinned memory pool is created at '"
                << PointerToString(buffer) << "' with size "
@@ -286,15 +286,15 @@ PinnedMemoryManager::Create(const Options& options)
         continue;
       }
       void* buffer = nullptr;
-#ifdef TRITON_ENABLE_GPU
-      auto err = cudaHostAlloc(
+#ifdef TRITON_ENABLE_ROCM
+      auto err = hipHostMalloc(
           &buffer, options.pinned_memory_pool_byte_size_,
-          cudaHostAllocPortable);
-      if (err != cudaSuccess) {
+          hipHostMallocPortable);
+      if (err != hipSuccess) {
         buffer = nullptr;
         LOG_WARNING << "Unable to allocate pinned system memory, pinned memory "
                        "pool will not be available: "
-                    << std::string(cudaGetErrorString(err));
+                    << std::string(hipGetErrorString(err));
       } else if (options.pinned_memory_pool_byte_size_ != 0) {
         LOG_INFO << "Pinned memory pool is created at '"
                  << PointerToString(buffer) << "' with size "

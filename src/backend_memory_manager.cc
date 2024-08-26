@@ -30,8 +30,8 @@
 #include "status.h"
 #include "tritonserver_apis.h"
 
-#ifdef TRITON_ENABLE_GPU
-#include <cuda_runtime_api.h>
+#ifdef TRITON_ENABLE_ROCM
+#include <hip/hip_runtime_api.h>
 
 #include "cuda_memory_manager.h"
 #endif  // TRITON_ENABLE_GPU
@@ -60,7 +60,7 @@ TRITONBACKEND_MemoryManagerAllocate(
 {
   switch (memory_type) {
     case TRITONSERVER_MEMORY_GPU:
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
     {
       auto status = CudaMemoryManager::Alloc(buffer, byte_size, memory_type_id);
       if (!status.IsOk()) {
@@ -77,7 +77,7 @@ TRITONBACKEND_MemoryManagerAllocate(
 #endif  // TRITON_ENABLE_GPU
 
     case TRITONSERVER_MEMORY_CPU_PINNED:
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
     {
       TRITONSERVER_MemoryType mt = memory_type;
       auto status = PinnedMemoryManager::Alloc(buffer, byte_size, &mt, false);
@@ -114,7 +114,7 @@ TRITONBACKEND_MemoryManagerFree(
 {
   switch (memory_type) {
     case TRITONSERVER_MEMORY_GPU: {
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
       auto status = CudaMemoryManager::Free(buffer, memory_type_id);
       if (!status.IsOk()) {
         return TRITONSERVER_ErrorNew(
@@ -126,7 +126,7 @@ TRITONBACKEND_MemoryManagerFree(
     }
 
     case TRITONSERVER_MEMORY_CPU_PINNED: {
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
       auto status = PinnedMemoryManager::Free(buffer);
       if (!status.IsOk()) {
         return TRITONSERVER_ErrorNew(

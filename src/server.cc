@@ -50,7 +50,7 @@
 #include "triton/common/model_config.h"
 #include "triton/common/table_printer.h"
 
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
 #include "cuda_memory_manager.h"
 #endif  // TRITON_ENABLE_GPU
 
@@ -89,7 +89,7 @@ InferenceServer::InferenceServer()
   extensions_.push_back("schedule_policy");
   extensions_.push_back("model_configuration");
   extensions_.push_back("system_shared_memory");
-  extensions_.push_back("cuda_shared_memory");
+  extensions_.push_back("rocm_shared_memory");
   extensions_.push_back("binary_tensor_data");
   extensions_.push_back("parameters");
 #ifdef TRITON_ENABLE_STATS
@@ -109,7 +109,7 @@ InferenceServer::InferenceServer()
   model_load_thread_count_ = 4;
   enable_model_namespacing_ = false;
 
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
   min_supported_compute_capability_ = TRITON_MIN_COMPUTE_CAPABILITY;
 #else
   min_supported_compute_capability_ = 0.0;
@@ -209,23 +209,23 @@ InferenceServer::Init()
   }
 
 
-#ifdef TRITON_ENABLE_GPU
-  // Set the default CUDA memory pool size for GPUs where it is not
+#ifdef TRITON_ENABLE_ROCM
+  // Set the default ROCM memory pool size for GPUs where it is not
   // set explicitly.
   std::set<int> supported_gpus;
   if (GetSupportedGPUs(&supported_gpus, min_supported_compute_capability_)
           .IsOk()) {
     for (const auto gpu : supported_gpus) {
-      if (cuda_memory_pool_size_.find(gpu) == cuda_memory_pool_size_.end()) {
-        cuda_memory_pool_size_[gpu] = 1 << 26;
+      if (rocm_memory_pool_size_.find(gpu) == rocm_memory_pool_size_.end()) {
+        rocm_memory_pool_size_[gpu] = 1 << 26;
       }
     }
   }
 
-  CudaMemoryManager::Options cuda_options(
-      min_supported_compute_capability_, cuda_memory_pool_size_);
-  status = CudaMemoryManager::Create(cuda_options);
-  // If CUDA memory manager can't be created, just log error as the
+  CudaMemoryManager::Options rocm_options(
+      min_supported_compute_capability_, rocm_memory_pool_size_);
+  status = CudaMemoryManager::Create(rocm_options);
+  // If ROCM memory manager can't be created, just log error as the
   // server can still function properly
   if (!status.IsOk()) {
     LOG_ERROR << status.Message();
@@ -272,7 +272,7 @@ InferenceServer::Init()
 InferenceServer::~InferenceServer()
 {
   PinnedMemoryManager::Reset();
-#ifdef TRITON_ENABLE_GPU
+#ifdef TRITON_ENABLE_ROCM
   CudaMemoryManager::Reset();
 #endif  // TRITON_ENABLE_GPU
 }
@@ -310,9 +310,9 @@ InferenceServer::Stop(const bool force)
                << inflight_status.size()
                << " model versions that have in-flight inferences";
       for (const auto& inflight : inflight_status) {
-        LOG_INFO << "Model '" << std::get<0>(inflight) << "' "
-                 << "(version " << std::get<1>(inflight) << ") has "
-                 << std::get<2>(inflight) << " in-flight inferences";
+        LOG_INFO << "Model '" << std::get<0>(inflight) << "' " << "(version "
+                 << std::get<1>(inflight) << ") has " << std::get<2>(inflight)
+                 << " in-flight inferences";
       }
 
       if (inflight_status.size() == 0) {
